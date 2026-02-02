@@ -1,0 +1,95 @@
+{
+  "time": {
+    "N": 5,
+    "T": 100
+  },
+  "compute": {
+    "pledged_compute_hat_c_i_flop": [
+      500000000000000000,
+      700000000000000000,
+      850000000000000000,
+      1000000000000000000,
+      1150000000000000000
+    ],
+    "action_constraints": {
+      "a_i_t_min": 0
+    }
+  },
+  "capability": {
+    "scaling_law": {
+      "lambda": 3e-11,
+      "gamma": 0.5
+    },
+    "observation": {
+      "eta_distribution": "Normal(0, sigma^2)",
+      "sigma": 0.05
+    }
+  },
+  "verification": {
+    "v_t": {
+      "type": "constant",
+      "value": 0.5,
+      "domain": [
+        0,
+        1
+      ]
+    },
+    "reporting_noise": {
+      "xi_distribution": "Normal(0, tau_i^2(v_t))",
+      "tau_i_v_form": "tau_i^2(v) = tau_i0^2 / (1 + beta_i * v)"
+    },
+    "tau_i0": [
+      50000000000000000,
+      60000000000000000,
+      75000000000000000,
+      90000000000000000,
+      100000000000000000
+    ],
+    "beta_i": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "test": {
+      "alpha": 0.05,
+      "z_alpha": 1.6448536269514722
+    }
+  },
+  "payoffs": {
+    "benefit_functional_form": "b_i(q) = theta_i * log(1 + q)",
+    "theta_i": [
+      0.8,
+      0.85,
+      0.9,
+      0.95,
+      1.0
+    ],
+    "cost_functional_form": "k_i(a) = kappa_i * a",
+    "kappa_i": [
+      8e-20,
+      9e-20,
+      9.5e-20,
+      1e-19,
+      1.05e-19
+    ],
+    "penalty_P_i": [
+      0.5,
+      0.75,
+      1.0,
+      1.0,
+      1.25
+    ]
+  },
+  "derived_notes": {
+    "effective_compute_A_t": "A_t = sum_i a_{i,t}",
+    "cumulative_compute_I_t": "I_t = sum_{s<=t} A_s",
+    "capability_q_t": "q_t = lambda * I_t^gamma",
+    "public_observation_o_t": "o_t = q_t + eta_t",
+    "report_r_i_t": "r_{i,t} = a_{i,t} + xi_{i,t}",
+    "defection_score_Z_i_t": "Z_{i,t} = (hat_c_i - r_{i,t}) / sqrt(tau_i^2(v_t))",
+    "detection_rule": "flag if Z_{i,t} > z_alpha",
+    "utility_u_i_t": "u_i(t) = b_i(q_t) - k_i(a_{i,t}) - P_i * 1{Z_{i,t} > z_alpha}"
+  }
+}
