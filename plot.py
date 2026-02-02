@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from model import load_params, run_verification_sweep, with_penalty_scale
+from model import load_params, run_verification_sweep, with_penalty_scale, with_cap_at_pledge
 
 
 def _ensure_dir(path: Path) -> None:
@@ -298,9 +298,16 @@ def main() -> None:
         help="Comma-separated multipliers for P_i, e.g. '0.5,1,2'. If provided, writes an extra welfare-vs-v plot/CSV.",
     )
     ap.add_argument("--title", type=str, default="")
+    ap.add_argument(
+        "--cap-at-pledge",
+        action="store_true",
+        help="Constrain actors to never exceed their pledged compute (a_i <= hat_c_i).",
+    )
     args = ap.parse_args()
 
     params = load_params(args.params)
+    if args.cap_at_pledge:
+        params = with_cap_at_pledge(params, True)
     outdir = Path(args.outdir)
     _ensure_dir(outdir)
 

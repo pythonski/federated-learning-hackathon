@@ -91,11 +91,17 @@ class ModelParams:
     others_expectation: Literal["pledge", "last_action"] = "pledge"
     a_grid_multiplier: float = 2.0
     a_grid_points: int = 301
+    cap_at_pledge: bool = False  # if True, actors cannot exceed their pledge
 
 
 def with_penalty_scale(params: ModelParams, scale: float) -> ModelParams:
     """Return a copy of params with penalties multiplied by scale."""
     return replace(params, penalty=params.penalty * float(scale))
+
+
+def with_cap_at_pledge(params: ModelParams, cap: bool = True) -> ModelParams:
+    """Return a copy of params with cap_at_pledge set."""
+    return replace(params, cap_at_pledge=cap)
 
 
 def load_params(path: str | Path) -> ModelParams:
@@ -140,6 +146,7 @@ def load_params(path: str | Path) -> ModelParams:
 
     a_grid_multiplier = float(data.get("behavior", {}).get("a_grid_multiplier", 2.0))
     a_grid_points = int(data.get("behavior", {}).get("a_grid_points", 301))
+    cap_at_pledge = bool(data.get("behavior", {}).get("cap_at_pledge", False))
 
     return ModelParams(
         N=N,
@@ -159,6 +166,7 @@ def load_params(path: str | Path) -> ModelParams:
         others_expectation=others_expectation,  # type: ignore[arg-type]
         a_grid_multiplier=a_grid_multiplier,
         a_grid_points=a_grid_points,
+        cap_at_pledge=cap_at_pledge,
     )
 
 
@@ -192,11 +200,14 @@ def _best_response_actions(
     I_prev: float,
     v: float,
     a_last: Optional[np.ndarray],
+    cap_at_pledge: bool = False,
 ) -> np.ndarray:
     """
     Myopic per-round best response under a simple expectation about others.
     Each actor chooses a_i to maximize:
       E[u_i] = theta_i * log(1 + q(I_prev + A_other + a_i)) - kappa_i * a_i - P_i * Pr(flag)
+
+    If cap_at_pledge=True, actions are constrained to a_i <= hat_c_i.
     """
     N = params.N
 
@@ -206,14 +217,18 @@ def _best_response_actions(
         a_expected = params.hat_c.copy()
 
     actions = np.zeros(N, dtype=float)
+    a_max_global = float(max(params.hat_c.max(), 1.0) * params.a_grid_multiplier)
     # Precompute tau for this v once per call.
     tau = np.sqrt(tau2(params, v))
 
     for i in range(N):
         A_other = float(a_expected.sum() - a_expected[i])
 
-        # Hard cap: actors cannot contribute above their pledge.
-        a_max_i = float(max(params.hat_c[i], 0.0))
+        # Per-actor grid: cap at hat_c_i if requested
+        if cap_at_pledge:
+            a_max_i = float(params.hat_c[i])
+        else:
+            a_max_i = a_max_global
         grid = np.linspace(0.0, a_max_i, params.a_grid_points, dtype=float)
 
         # Evaluate expected utility on a grid and pick the best.
@@ -265,7 +280,7 @@ def simulate(
     tau = np.sqrt(t2)
 
     for t in range(T):
-        a_t = _best_response_actions(params, I_prev=I, v=v_use, a_last=a_last)
+        a_t = _best_response_actions(params, I_prev=I, v=v_use, a_last=a_last, cap_at_pledge=params.cap_at_pledge)
         A_t = float(a_t.sum())
         I = I + A_t
         q_t = params.lam * (I**params.gamma)
@@ -321,7 +336,7 @@ def simulate_expected(
     a_last = None
 
     for t in range(T):
-        a_t = _best_response_actions(params, I_prev=I, v=v_use, a_last=a_last)
+        a_t = _best_response_actions(params, I_prev=I, v=v_use, a_last=a_last, cap_at_pledge=params.cap_at_pledge)
         A_t = float(a_t.sum())
         I = I + A_t
         q_t = params.lam * (I**params.gamma)
@@ -345,7 +360,7 @@ class SweepMetrics:
     expected_utility: np.ndarray  # (V, N)
     gini_compute: np.ndarray  # (V,)
     total_welfare: np.ndarray  # (V,)  (mean per-round sum of utilities)
-    compliance_gap: np.ndarray  # (V, N) mean (hat_c_i - a_i) per actor (positive = under-contribution)
+    compliance_gap: np.ndarray  # (V, N) mean (a_i - hat_c_i) per actor
     cumulative_capability: np.ndarray  # (V,) final-period q(T)
     marginal_welfare: np.ndarray  # (V,) d(welfare)/dv (forward diff, last = 0)
 
